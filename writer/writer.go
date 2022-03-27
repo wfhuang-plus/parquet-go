@@ -442,7 +442,8 @@ func (pw *ParquetWriter) Flush(flag bool) error {
 
 					offsetIndex.PageLocations = append(offsetIndex.PageLocations, pageLocation)
 
-					firstRowIndex += int64(page.Header.DataPageHeader.NumValues)
+					//firstRowIndex += int64(page.Header.DataPageHeader.NumValues)
+                    firstRowIndex += page.NumRows
 				}
 
 				data := rowGroup.Chunks[k].Pages[l].RawData

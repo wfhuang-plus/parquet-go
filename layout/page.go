@@ -39,6 +39,8 @@ type Page struct {
 	Info *common.Tag
 
 	PageSize int32
+
+    NumRows  int32
 }
 
 //Create a new page
@@ -224,8 +226,15 @@ func (page *Page) DataPageCompress(compressType parquet.CompressionCodec) []byte
 	}
 
 	//repetitionLevel/////////////////////////////////
+	r0Num := int32(ln)
 	var repetitionLevelBuf []byte
 	if page.DataTable.MaxRepetitionLevel > 0 {
+        for i := 0; i < ln; i++ {
+			if page.DataTable.RepetitionLevels[i] == 0 {
+				r0Num++
+			}
+		}
+
 		repetitionLevelBuf = encoding.WriteRLEBitPackedHybridInt32(
 			page.DataTable.RepetitionLevels,
 			int32(bits.Len32(uint32(page.DataTable.MaxRepetitionLevel))))
@@ -270,12 +279,14 @@ func (page *Page) DataPageCompress(compressType parquet.CompressionCodec) []byte
 
 	page.Header.DataPageHeader.Statistics.NullCount = page.NullCount
 
+
 	ts := thrift.NewTSerializer()
 	ts.Protocol = thrift.NewTCompactProtocolFactory().GetProtocol(ts.Transport)
 	pageHeaderBuf, _ := ts.Write(context.TODO(), page.Header)
 
 	res := append(pageHeaderBuf, dataEncodeBuf...)
 	page.RawData = res
+    page.NumRows = r0Num
 
 	return res
 }
@@ -307,7 +318,7 @@ func (page *Page) DataPageV2Compress(compressType parquet.CompressionCodec) []by
 	}
 
 	//repetitionLevel/////////////////////////////////
-	r0Num := int32(0)
+	r0Num := int32(ln)
 	var repetitionLevelBuf []byte
 	if page.DataTable.MaxRepetitionLevel > 0 {
 		numInterfaces := make([]interface{}, ln)
@@ -370,6 +381,7 @@ func (page *Page) DataPageV2Compress(compressType parquet.CompressionCodec) []by
 	res = append(res, definitionLevelBuf...)
 	res = append(res, dataEncodeBuf...)
 	page.RawData = res
+    page.NumRows = r0Num
 
 	return res
 }
