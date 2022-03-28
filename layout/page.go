@@ -229,6 +229,7 @@ func (page *Page) DataPageCompress(compressType parquet.CompressionCodec) []byte
 	r0Num := int32(ln)
 	var repetitionLevelBuf []byte
 	if page.DataTable.MaxRepetitionLevel > 0 {
+		r0Num = 0
         for i := 0; i < ln; i++ {
 			if page.DataTable.RepetitionLevels[i] == 0 {
 				r0Num++
@@ -321,6 +322,7 @@ func (page *Page) DataPageV2Compress(compressType parquet.CompressionCodec) []by
 	r0Num := int32(ln)
 	var repetitionLevelBuf []byte
 	if page.DataTable.MaxRepetitionLevel > 0 {
+		r0Num = 0
 		numInterfaces := make([]interface{}, ln)
 		for i := 0; i < ln; i++ {
 			numInterfaces[i] = int64(page.DataTable.RepetitionLevels[i])
