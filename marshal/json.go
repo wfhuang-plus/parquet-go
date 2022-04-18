@@ -63,12 +63,16 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 			d = json.NewDecoder(strings.NewReader(t))
 		case []byte:
 			d = json.NewDecoder(bytes.NewReader(t))
+		default:
+			node.Val = reflect.ValueOf(ss[i])
 		}
 		// `useNumber`causes the Decoder to unmarshal a number into an interface{} as a Number instead of as a float64.
-		d.UseNumber()
-		d.Decode(&ui)
+		if d != nil {
+			d.UseNumber()
+			d.Decode(&ui)
+			node.Val = reflect.ValueOf(ui)
+		}
 
-		node.Val = reflect.ValueOf(ui)
 		node.PathMap = pathMap
 
 		stack = append(stack, node)

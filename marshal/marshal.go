@@ -307,11 +307,21 @@ func Marshal(srcInterface []interface{}, schemaHandler *schema.SchemaHandler) (t
 			} else {
 				table := res[node.PathMap.Path]
 				schema := schemaHandler.SchemaElements[schemaIndex]
-				var v interface{}
-				if node.Val.IsValid() {
-					v = node.Val.Interface()
+				/*
+					var v interface{}
+					if node.Val.IsValid() {
+						v = node.Val.Interface()
+					}
+				*/
+
+				pT, cT := schema.Type, schema.ConvertedType
+				val, err := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
+				if err != nil {
+					return nil, err
 				}
-				table.Values = append(table.Values, types.InterfaceToParquetType(v, schema.Type))
+				table.Values = append(table.Values, val)
+
+				//table.Values = append(table.Values, types.InterfaceToParquetType(v, schema.Type))
 				table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
 				table.RepetitionLevels = append(table.RepetitionLevels, node.RL)
 				continue
