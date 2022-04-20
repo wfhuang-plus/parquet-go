@@ -190,8 +190,11 @@ func (pw *ParquetWriter) WriteStop() error {
 	if _, err = pw.PFile.Write(footerBuf); err != nil {
 		return err
 	}
+	footerBufSize := len(footerBuf)
+	pw.Offset += int64(footerBufSize)
+
 	footerSizeBuf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(footerSizeBuf, uint32(len(footerBuf)))
+	binary.LittleEndian.PutUint32(footerSizeBuf, uint32(footerBufSize))
 
 	if _, err = pw.PFile.Write(footerSizeBuf); err != nil {
 		return err
@@ -199,6 +202,7 @@ func (pw *ParquetWriter) WriteStop() error {
 	if _, err = pw.PFile.Write([]byte("PAR1")); err != nil {
 		return err
 	}
+	pw.Offset += 8
 	return nil
 
 }
@@ -443,7 +447,7 @@ func (pw *ParquetWriter) Flush(flag bool) error {
 					offsetIndex.PageLocations = append(offsetIndex.PageLocations, pageLocation)
 
 					//firstRowIndex += int64(page.Header.DataPageHeader.NumValues)
-                    firstRowIndex += int64(page.NumRows)
+					firstRowIndex += int64(page.NumRows)
 				}
 
 				data := rowGroup.Chunks[k].Pages[l].RawData
