@@ -63,6 +63,9 @@ type Tag struct {
 	LogicalTypeFields      map[string]string
 	KeyLogicalTypeFields   map[string]string
 	ValueLogicalTypeFields map[string]string
+
+	BloomFilter       bool
+	FalsePositiveRate float64
 }
 
 func NewTag() *Tag {
@@ -272,6 +275,16 @@ func StringToTag(tag string) (*Tag, error) {
 				mp.ValueEncoding = parquet.Encoding_BYTE_STREAM_SPLIT
 			default:
 				return nil, fmt.Errorf("unknown valueencoding type: '%v'", val)
+			}
+
+		case "bloomfilter":
+			if mp.BloomFilter, err = Str2Bool(val); err != nil {
+				return nil, fmt.Errorf("failed to parse bloomfilter: %s", err.Error())
+			}
+
+		case "falsepositiverate":
+			if mp.FalsePositiveRate, err = Str2Float(val); err != nil {
+				return nil, fmt.Errorf("failed to parse falsepositiverate: %s", err.Error())
 			}
 		default:
 			if strings.HasPrefix(key, "logicaltype") {
@@ -762,6 +775,14 @@ func Str2Bool(val string) (bool, error) {
 		return false, err
 	}
 	return valBoolean, nil
+}
+
+func Str2Float(val string) (float64, error) {
+	valFloat, err := strconv.ParseFloat(val, 32)
+	if err != nil {
+		return 0, err
+	}
+	return valFloat, nil
 }
 
 type FuncTable interface {

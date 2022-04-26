@@ -4,10 +4,7 @@ import (
 	"io"
 
 	"github.com/xitongsys/parquet-go-source/writerfile"
-	"github.com/xitongsys/parquet-go/layout"
 	"github.com/xitongsys/parquet-go/marshal"
-	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/schema"
 	"github.com/xitongsys/parquet-go/source"
 )
 
@@ -15,15 +12,26 @@ type JSONWriter struct {
 	ParquetWriter
 }
 
-func NewJSONWriterFromWriter(jsonSchema string, w io.Writer, np int64) (*JSONWriter, error) {
+func NewJSONWriterFromWriter(jsonSchema string, w io.Writer, np int64) (*ParquetWriter, error) {
 	wf := writerfile.NewWriterFile(w)
 	return NewJSONWriter(jsonSchema, wf, np)
 }
 
+func NewJSONWriter(jsonSchema string, pFile source.ParquetFile, np int64) (*ParquetWriter, error) {
+	res, err := NewParquetWriter(pFile, jsonSchema, np)
+	if err != nil {
+		return nil, err
+	}
+	res.MarshalFunc = marshal.MarshalJSON
+	return res, err
+}
+
+/*
 //Create JSON writer
-func NewJSONWriter(jsonSchema string, pfile source.ParquetFile, np int64) (*JSONWriter, error) {
+func NewJSONWriter(jsonSchema string, pfile source.ParquetFile, np int64) (*ParquetWriter, error) {
 	var err error
-	res := new(JSONWriter)
+	//res := new(JSONWriter)
+	res := new(ParquetWriter)
 	res.SchemaHandler, err = schema.NewSchemaHandlerFromJSON(jsonSchema)
 	if err != nil {
 		return res, err
@@ -44,3 +52,5 @@ func NewJSONWriter(jsonSchema string, pfile source.ParquetFile, np int64) (*JSON
 	res.MarshalFunc = marshal.MarshalJSON
 	return res, err
 }
+
+*/

@@ -1,14 +1,17 @@
 package writer
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
 
 	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/xitongsys/parquet-go-source/writerfile"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/layout"
@@ -41,6 +44,8 @@ type ParquetWriter struct {
 
 	DictRecs map[string]*layout.DictRecType
 
+	BloomFilterBuf map[string][]interface{}
+
 	ColumnIndexes []*parquet.ColumnIndex
 	OffsetIndexes []*parquet.OffsetIndex
 
@@ -69,6 +74,7 @@ func NewParquetWriter(pFile source.ParquetFile, obj interface{}, np int64) (*Par
 	res.PFile = pFile
 	res.PagesMapBuf = make(map[string][]*layout.Page)
 	res.DictRecs = make(map[string]*layout.DictRecType)
+	res.BloomFilterBuf = make(map[string][]interface{})
 	res.Footer = parquet.NewFileMetaData()
 	res.Footer.Version = 1
 	res.ColumnIndexes = make([]*parquet.ColumnIndex, 0)
@@ -78,6 +84,10 @@ func NewParquetWriter(pFile source.ParquetFile, obj interface{}, np int64) (*Par
 	createdBy := "parquet-go version latest"
 	res.Footer.CreatedBy = &createdBy
 	_, err = res.PFile.Write([]byte("PAR1"))
+	if err != nil {
+		return nil, err
+	}
+
 	res.MarshalFunc = marshal.Marshal
 
 	if obj != nil {
@@ -326,6 +336,12 @@ func (pw *ParquetWriter) flushObjs() error {
 
 	for _, pagesMap := range pagesMapList {
 		for name, pages := range pagesMap {
+			var bloomFilter bool = false
+
+			if len(pages) > 0 && pages[0].Info.BloomFilter {
+				bloomFilter = true
+			}
+
 			if _, ok := pw.PagesMapBuf[name]; !ok {
 				pw.PagesMapBuf[name] = pages
 			} else {
@@ -333,6 +349,9 @@ func (pw *ParquetWriter) flushObjs() error {
 			}
 			for _, page := range pages {
 				pw.Size += int64(len(page.RawData))
+				if bloomFilter {
+					pw.BloomFilterBuf[name] = append(pw.BloomFilterBuf[name], page.DataTable.Values...)
+				}
 				page.DataTable = nil //release memory
 			}
 		}
@@ -365,6 +384,62 @@ func (pw *ParquetWriter) Flush(flag bool) error {
 		}
 
 		pw.DictRecs = make(map[string]*layout.DictRecType) //clean records for next chunks
+
+		ts := thrift.NewTSerializer()
+		ts.Protocol = thrift.NewTCompactProtocolFactory().GetProtocol(ts.Transport)
+		for name, values := range pw.BloomFilterBuf {
+			info := pw.SchemaHandler.Infos[pw.SchemaHandler.MapIndex[name]]
+			falsePositiveRate := 0.01
+			if info.FalsePositiveRate > 0 {
+				falsePositiveRate = info.FalsePositiveRate
+			}
+			filter := bloom.NewWithEstimates(uint(len(values)), falsePositiveRate)
+			for _, value := range values {
+				filter.Add([]byte(fmt.Sprintf("%v", value)))
+			}
+
+			bitSetBuf := bytes.NewBuffer([]byte{})
+			bitSetBufSize, err := filter.WriteTo(bitSetBuf)
+			if err != nil {
+				return err
+			}
+
+			numBytes := int32(bitSetBufSize)
+
+			algorithm := parquet.NewBloomFilterAlgorithm()
+			algorithm.BLOCK = parquet.NewSplitBlockAlgorithm()
+
+			hash := parquet.NewBloomFilterHash()
+			hash.XXHASH = parquet.NewXxHash()
+
+			compression := parquet.NewBloomFilterCompression()
+			compression.UNCOMPRESSED = parquet.NewUncompressed()
+
+			bloomFilterHeader := &parquet.BloomFilterHeader{
+				NumBytes:    numBytes,
+				Algorithm:   algorithm,
+				Hash:        hash,
+				Compression: compression,
+			}
+
+			bloomFilterHeaderBuf, err := ts.Write(context.TODO(), bloomFilterHeader)
+			if err != nil {
+				return err
+			}
+			if _, err = pw.PFile.Write(bloomFilterHeaderBuf); err != nil {
+				return err
+			}
+			if _, err = pw.PFile.Write(bitSetBuf.Bytes()); err != nil {
+				return err
+			}
+
+			pos := pw.Offset
+			chunkMap[name].ChunkHeader.MetaData.BloomFilterOffset = &pos
+			bloomFilterSize := int32(len(bloomFilterHeaderBuf)) + numBytes
+
+			pw.Offset += int64(bloomFilterSize)
+		}
+		pw.BloomFilterBuf = make(map[string][]interface{})
 
 		//chunks -> rowGroup
 		rowGroup := layout.NewRowGroup()
