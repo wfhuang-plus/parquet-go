@@ -220,6 +220,193 @@ func StrToParquetType(s string, pT *parquet.Type, cT *parquet.ConvertedType, len
 	}
 }
 
+func InterfaceToParquetType(src interface{}, pT *parquet.Type, cT *parquet.ConvertedType, length int, scale int) interface{} {
+	if src == nil {
+		return src
+	}
+
+	if pT == nil {
+		return src
+	}
+
+	if cT == nil {
+		switch *pT {
+		case parquet.Type_BOOLEAN:
+			if _, ok := src.(bool); ok {
+				return src
+			} else {
+				return reflect.ValueOf(src).Bool()
+			}
+
+		case parquet.Type_INT32:
+			if _, ok := src.(int32); ok {
+				return src
+			} else {
+				return int32(reflect.ValueOf(src).Int())
+			}
+
+		case parquet.Type_INT64:
+			if _, ok := src.(int64); ok {
+				return src
+			} else {
+				return reflect.ValueOf(src).Int()
+			}
+
+		case parquet.Type_FLOAT:
+			if _, ok := src.(float32); ok {
+				return src
+			} else {
+				return float32(reflect.ValueOf(src).Float())
+			}
+
+		case parquet.Type_DOUBLE:
+			if _, ok := src.(float64); ok {
+				return src
+			} else {
+				return reflect.ValueOf(src).Float()
+			}
+
+		case parquet.Type_INT96:
+			fallthrough
+		case parquet.Type_BYTE_ARRAY:
+			fallthrough
+		case parquet.Type_FIXED_LEN_BYTE_ARRAY:
+			if _, ok := src.(string); ok {
+				return src
+			} else {
+				return reflect.ValueOf(src).String()
+			}
+
+		default:
+			return src
+		}
+	}
+
+	switch *cT {
+	case parquet.ConvertedType_UTF8:
+		if _, ok := src.(string); ok {
+			return src
+		} else {
+			return reflect.ValueOf(src).String()
+		}
+
+	case parquet.ConvertedType_INT_8:
+		if val, ok := src.(int8); ok {
+			return int32(val)
+		} else {
+			return int32(reflect.ValueOf(src).Int())
+		}
+
+	case parquet.ConvertedType_INT_16:
+		if val, ok := src.(int16); ok {
+			return int32(val)
+		} else {
+			return int32(reflect.ValueOf(src).Int())
+		}
+
+	case parquet.ConvertedType_INT_32:
+		if _, ok := src.(int32); ok {
+			return src
+		} else {
+			return int32(reflect.ValueOf(src).Int())
+		}
+
+	case parquet.ConvertedType_UINT_8:
+		if val, ok := src.(uint8); ok {
+			return int32(val)
+		} else {
+			return int32(reflect.ValueOf(src).Uint())
+		}
+
+	case parquet.ConvertedType_UINT_16:
+		if val, ok := src.(uint16); ok {
+			return int32(val)
+		} else {
+			return int32(reflect.ValueOf(src).Uint())
+		}
+
+	case parquet.ConvertedType_UINT_32:
+		if val, ok := src.(uint32); ok {
+			return int32(val)
+		} else {
+			return int32(reflect.ValueOf(src).Uint())
+		}
+
+	case parquet.ConvertedType_INT_64:
+		if _, ok := src.(int64); ok {
+			return src
+		} else {
+			return reflect.ValueOf(src).Int()
+		}
+
+	case parquet.ConvertedType_UINT_64:
+		if val, ok := src.(uint64); ok {
+			return int64(val)
+		} else {
+			return int64(reflect.ValueOf(src).Uint())
+		}
+
+	case parquet.ConvertedType_TIME_MICROS:
+		fallthrough
+	case parquet.ConvertedType_TIMESTAMP_MICROS:
+		fallthrough
+	case parquet.ConvertedType_TIMESTAMP_MILLIS:
+		if _, ok := src.(int64); ok {
+			return src
+		} else {
+			return reflect.ValueOf(src).Int()
+		}
+
+	case parquet.ConvertedType_DATE:
+		fallthrough
+	case parquet.ConvertedType_TIME_MILLIS:
+		if _, ok := src.(int32); ok {
+			return src
+		} else {
+			return int32(reflect.ValueOf(src).Int())
+		}
+
+	case parquet.ConvertedType_INTERVAL:
+		s := fmt.Sprintf("%v", src)
+		res := StrIntToBinary(s, "LittleEndian", 12, false)
+		return res
+
+	case parquet.ConvertedType_DECIMAL:
+		s := fmt.Sprintf("%v", src)
+		numSca := big.NewFloat(1.0)
+		for i := 0; i < scale; i++ {
+			numSca.Mul(numSca, big.NewFloat(10))
+		}
+		num := new(big.Float)
+		num.SetString(s)
+		num.Mul(num, numSca)
+
+		if *pT == parquet.Type_INT32 {
+			tmp, _ := num.Float64()
+			return int32(tmp)
+
+		} else if *pT == parquet.Type_INT64 {
+			tmp, _ := num.Float64()
+			return int64(tmp)
+
+		} else if *pT == parquet.Type_FIXED_LEN_BYTE_ARRAY {
+			s = num.Text('f', 0)
+			res := StrIntToBinary(s, "BigEndian", length, true)
+			return res
+
+		} else {
+			s = num.Text('f', 0)
+			res := StrIntToBinary(s, "BigEndian", 0, true)
+			return res
+		}
+
+	default:
+		return src
+
+	}
+}
+
+/*
 func InterfaceToParquetType(src interface{}, pT *parquet.Type) interface{} {
 	if src == nil {
 		return src
@@ -280,6 +467,7 @@ func InterfaceToParquetType(src interface{}, pT *parquet.Type) interface{} {
 		return src
 	}
 }
+*/
 
 //order=LittleEndian or BigEndian; length is byte num
 func StrIntToBinary(num string, order string, length int, signed bool) string {

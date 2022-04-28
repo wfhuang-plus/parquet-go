@@ -252,6 +252,7 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 				table := res[node.PathMap.Path]
 				pT, cT := schema.Type, schema.ConvertedType
 				val, err := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
+
 				if err != nil {
 					return nil, err
 				}

@@ -67,7 +67,7 @@ func (sh *SchemaHandler) GetTypes() []reflect.Type {
 				} else {
 					fields := []reflect.StructField{}
 					for _, ci := range elements[idx] {
-						tag := reflect.StructTag(fmt.Sprintf("json:\"%s\"", sh.Infos[ci].ExName))
+						tag := reflect.StructTag(fmt.Sprintf("json:\"%s,omitempty\"", sh.Infos[ci].ExName))
 						fields = append(fields, reflect.StructField{
 							Name: sh.Infos[ci].InName,
 							Type: elementTypes[ci],

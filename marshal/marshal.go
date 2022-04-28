@@ -307,6 +307,7 @@ func Marshal(srcInterface []interface{}, schemaHandler *schema.SchemaHandler) (t
 			} else {
 				table := res[node.PathMap.Path]
 				schema := schemaHandler.SchemaElements[schemaIndex]
+
 				/*
 					var v interface{}
 					if node.Val.IsValid() {
@@ -315,10 +316,8 @@ func Marshal(srcInterface []interface{}, schemaHandler *schema.SchemaHandler) (t
 				*/
 
 				pT, cT := schema.Type, schema.ConvertedType
-				val, err := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
-				if err != nil {
-					return nil, err
-				}
+				//val, err := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
+				val := types.InterfaceToParquetType(node.Val.Interface(), pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
 				table.Values = append(table.Values, val)
 
 				//table.Values = append(table.Values, types.InterfaceToParquetType(v, schema.Type))
