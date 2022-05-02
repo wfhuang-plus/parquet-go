@@ -40,7 +40,7 @@ type Page struct {
 
 	PageSize int32
 
-    NumRows  int32
+	NumRows int32
 }
 
 //Create a new page
@@ -230,7 +230,7 @@ func (page *Page) DataPageCompress(compressType parquet.CompressionCodec) []byte
 	var repetitionLevelBuf []byte
 	if page.DataTable.MaxRepetitionLevel > 0 {
 		r0Num = 0
-        for i := 0; i < ln; i++ {
+		for i := 0; i < ln; i++ {
 			if page.DataTable.RepetitionLevels[i] == 0 {
 				r0Num++
 			}
@@ -280,14 +280,13 @@ func (page *Page) DataPageCompress(compressType parquet.CompressionCodec) []byte
 
 	page.Header.DataPageHeader.Statistics.NullCount = page.NullCount
 
-
 	ts := thrift.NewTSerializer()
 	ts.Protocol = thrift.NewTCompactProtocolFactory().GetProtocol(ts.Transport)
 	pageHeaderBuf, _ := ts.Write(context.TODO(), page.Header)
 
 	res := append(pageHeaderBuf, dataEncodeBuf...)
 	page.RawData = res
-    page.NumRows = r0Num
+	page.NumRows = r0Num
 
 	return res
 }
@@ -383,7 +382,7 @@ func (page *Page) DataPageV2Compress(compressType parquet.CompressionCodec) []by
 	res = append(res, definitionLevelBuf...)
 	res = append(res, dataEncodeBuf...)
 	page.RawData = res
-    page.NumRows = r0Num
+	page.NumRows = r0Num
 
 	return res
 }
