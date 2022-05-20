@@ -28,6 +28,9 @@ type ParquetWriter struct {
 	Footer        *parquet.FileMetaData
 	PFile         source.ParquetFile
 
+	MinPageNum  int
+	MinPageSize int64
+
 	PageSize        int64
 	RowGroupSize    int64
 	CompressionType parquet.CompressionCodec
@@ -63,6 +66,7 @@ func NewParquetWriter(pFile source.ParquetFile, obj interface{}, np int64) (*Par
 
 	res := new(ParquetWriter)
 	res.NP = np
+	res.MinPageNum = 1
 	res.PageSize = 8 * 1024              //8K
 	res.RowGroupSize = 128 * 1024 * 1024 //128M
 	res.CompressionType = parquet.CompressionCodec_SNAPPY
@@ -234,9 +238,15 @@ func (pw *ParquetWriter) Write(src interface{}) error {
 	pw.ObjsSize += pw.ObjSize
 	pw.Objs = append(pw.Objs, src)
 
+	//fmt.Printf("objnum: %d, size: %d\n", len(pw.Objs), pw.ObjsSize)
+	if len(pw.Objs) <= pw.MinPageNum {
+		pw.MinPageSize = pw.ObjsSize
+	}
+
 	criSize := pw.NP * pw.PageSize * pw.SchemaHandler.GetColumnNum()
 
-	if pw.ObjsSize >= criSize {
+	if pw.ObjsSize >= criSize && len(pw.Objs) >= pw.MinPageNum {
+		//fmt.Printf("objsSize: %d, conn: %d, pageSize: %d, columnNum: %d, criSize: %d, obj num: %d\n", pw.ObjsSize, pw.NP, pw.PageSize, pw.SchemaHandler.GetColumnNum(), criSize, len(pw.Objs))
 		err = pw.Flush(false)
 
 	} else {
@@ -257,6 +267,13 @@ func (pw *ParquetWriter) flushObjs() error {
 	for i := 0; i < int(pw.NP); i++ {
 		pagesMapList[i] = make(map[string][]*layout.Page)
 	}
+
+	pageSize := pw.PageSize
+	if pw.PageSize < pw.MinPageSize && int(l) == pw.MinPageNum {
+		pageSize = pw.MinPageSize
+	}
+
+	fmt.Printf("pagesize: %d\n", pageSize)
 
 	var c int64 = 0
 	delta := (l + pw.NP - 1) / pw.NP
@@ -310,11 +327,11 @@ func (pw *ParquetWriter) flushObjs() error {
 								pw.DictRecs[name] = layout.NewDictRec(*table.Schema.Type)
 							}
 							pagesMapList[index][name], _ = layout.TableToDictDataPages(pw.DictRecs[name],
-								table, int32(pw.PageSize), 32, pw.CompressionType)
+								table, int32(pageSize), 32, pw.CompressionType)
 						}()
 
 					} else {
-						pagesMapList[index][name], _ = layout.TableToDataPages(table, int32(pw.PageSize),
+						pagesMapList[index][name], _ = layout.TableToDataPages(table, int32(pageSize),
 							pw.CompressionType)
 					}
 				}

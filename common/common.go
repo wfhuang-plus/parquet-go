@@ -954,6 +954,8 @@ func (table decimalStringFuncTable) MinMaxSize(minVal interface{}, maxVal interf
 func SizeOf(val reflect.Value) int64 {
 	var size int64
 	switch val.Type().Kind() {
+	case reflect.Interface:
+		return SizeOf(val.Elem())
 	case reflect.Ptr:
 		if val.IsNil() {
 			return 0
@@ -980,7 +982,11 @@ func SizeOf(val reflect.Value) int64 {
 		return 1
 	case reflect.Int32:
 		return 4
+	case reflect.Uint32:
+		return 4
 	case reflect.Int64:
+		return 8
+	case reflect.Uint64:
 		return 8
 	case reflect.String:
 		return int64(val.Len())
