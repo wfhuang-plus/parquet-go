@@ -348,8 +348,30 @@ func Marshal(srcInterface []interface{}, schemaHandler *schema.SchemaHandler) (t
 
 				}
 			} else {
+				keysMap := make(map[string]int)
 				for _, node := range nodes {
 					stack = append(stack, node)
+					keysMap[node.PathMap.Path] = 1
+				}
+
+				if tk == reflect.Struct {
+					for _, pathMap := range node.PathMap.Children {
+						newPathStr := pathMap.Path
+						_, ok := keysMap[newPathStr]
+						if !ok {
+							for path, table := range res {
+								if strings.HasPrefix(path, newPathStr) &&
+									(len(path) == len(newPathStr) || path[len(newPathStr)] == common.PAR_GO_PATH_DELIMITER[0]) {
+
+									table.Values = append(table.Values, nil)
+									table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
+									table.RepetitionLevels = append(table.RepetitionLevels, node.RL)
+								}
+							}
+						}
+
+					}
+
 				}
 			}
 		}

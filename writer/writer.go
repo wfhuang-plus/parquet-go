@@ -269,11 +269,9 @@ func (pw *ParquetWriter) flushObjs() error {
 	}
 
 	pageSize := pw.PageSize
-	if pw.PageSize < pw.MinPageSize && int(l) == pw.MinPageNum {
+	if pw.PageSize < pw.MinPageSize && int(l) <= pw.MinPageNum {
 		pageSize = pw.MinPageSize
 	}
-
-	fmt.Printf("pagesize: %d\n", pageSize)
 
 	var c int64 = 0
 	delta := (l + pw.NP - 1) / pw.NP
@@ -394,9 +392,11 @@ func (pw *ParquetWriter) Flush(flag bool) error {
 				dictPage, _ := layout.DictRecToDictPage(pw.DictRecs[name], int32(pw.PageSize), pw.CompressionType)
 				tmp := append([]*layout.Page{dictPage}, pages...)
 				chunkMap[name] = layout.PagesToDictChunk(tmp)
-			} else {
+			} else if len(pages) > 0 {
 				chunkMap[name] = layout.PagesToChunk(pages)
 
+			} else {
+				return fmt.Errorf("Flush fail, %s has no pages", name)
 			}
 		}
 
