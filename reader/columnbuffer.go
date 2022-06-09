@@ -97,6 +97,7 @@ func (cbt *ColumnBufferType) NextRowGroup() error {
 		cbt.ThriftReader.Close()
 	}
 
+	size = 4096 //limit bufio size
 	cbt.ThriftReader = source.ConvertToThriftReader(cbt.PFile, offset, size)
 	cbt.ChunkReadValues = 0
 	cbt.DictPage = nil

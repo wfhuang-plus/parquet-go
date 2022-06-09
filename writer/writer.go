@@ -28,18 +28,20 @@ type ParquetWriter struct {
 	Footer        *parquet.FileMetaData
 	PFile         source.ParquetFile
 
-	MinPageNum  int
-	MinPageSize int64
+	MinPageNum int
 
 	PageSize        int64
 	RowGroupSize    int64
 	CompressionType parquet.CompressionCodec
 	Offset          int64
 
-	Objs              []interface{}
-	ObjsSize          int64
-	ObjSize           int64
-	CheckSizeCritical int64
+	Objs     []interface{}
+	ObjsSize int64
+	ObjSize  int64
+
+	SimpleSize int64
+	SimpleNum  int64
+	//CheckSizeCritical int64
 
 	PagesMapBuf map[string][]*layout.Page
 	Size        int64
@@ -71,7 +73,8 @@ func NewParquetWriter(pFile source.ParquetFile, obj interface{}, np int64) (*Par
 	res.RowGroupSize = 128 * 1024 * 1024 //128M
 	res.CompressionType = parquet.CompressionCodec_SNAPPY
 	res.ObjsSize = 0
-	res.CheckSizeCritical = 0
+	res.SimpleNum = 0
+	res.SimpleSize = 0
 	res.Size = 0
 	res.NumRows = 0
 	res.Offset = 4
@@ -224,7 +227,7 @@ func (pw *ParquetWriter) WriteStop() error {
 //Write one object to parquet file
 func (pw *ParquetWriter) Write(src interface{}) error {
 	var err error
-	ln := int64(len(pw.Objs))
+	//ln := int64(len(pw.Objs))
 
 	val := reflect.ValueOf(src)
 	if val.Kind() == reflect.Ptr {
@@ -232,27 +235,26 @@ func (pw *ParquetWriter) Write(src interface{}) error {
 		src = val.Interface()
 	}
 
-	if pw.CheckSizeCritical <= ln {
-		pw.ObjSize = (pw.ObjSize+common.SizeOf(val))/2 + 1
+	if pw.SimpleNum <= 30 {
+		pw.SimpleSize += common.SizeOf(val)
+		pw.SimpleNum++
+		pw.ObjSize = pw.SimpleSize/pw.SimpleNum + 1
 	}
 	pw.ObjsSize += pw.ObjSize
 	pw.Objs = append(pw.Objs, src)
 
-	//fmt.Printf("objnum: %d, size: %d\n", len(pw.Objs), pw.ObjsSize)
-	if len(pw.Objs) <= pw.MinPageNum {
-		pw.MinPageSize = pw.ObjsSize
-	}
-
 	criSize := pw.NP * pw.PageSize * pw.SchemaHandler.GetColumnNum()
 
 	if pw.ObjsSize >= criSize && len(pw.Objs) >= pw.MinPageNum {
-		//fmt.Printf("objsSize: %d, conn: %d, pageSize: %d, columnNum: %d, criSize: %d, obj num: %d\n", pw.ObjsSize, pw.NP, pw.PageSize, pw.SchemaHandler.GetColumnNum(), criSize, len(pw.Objs))
+		//fmt.Println(pw.MinPageNum)
 		err = pw.Flush(false)
-
-	} else {
-		dln := (criSize - pw.ObjsSize + pw.ObjSize - 1) / pw.ObjSize / 2
-		pw.CheckSizeCritical = dln + ln
 	}
+	/*
+		else {
+			dln := (criSize - pw.ObjsSize + pw.ObjSize - 1) / pw.ObjSize / 2
+			pw.CheckSizeCritical = dln + ln
+		}
+	*/
 	return err
 
 }
@@ -268,10 +270,7 @@ func (pw *ParquetWriter) flushObjs() error {
 		pagesMapList[i] = make(map[string][]*layout.Page)
 	}
 
-	pageSize := pw.PageSize
-	if pw.PageSize < pw.MinPageSize && int(l) <= pw.MinPageNum {
-		pageSize = pw.MinPageSize
-	}
+	//	pageSize := pw.PageSize
 
 	var c int64 = 0
 	delta := (l + pw.NP - 1) / pw.NP
@@ -325,11 +324,11 @@ func (pw *ParquetWriter) flushObjs() error {
 								pw.DictRecs[name] = layout.NewDictRec(*table.Schema.Type)
 							}
 							pagesMapList[index][name], _ = layout.TableToDictDataPages(pw.DictRecs[name],
-								table, int32(pageSize), 32, pw.CompressionType)
+								table, int32(pw.PageSize), 32, pw.CompressionType)
 						}()
 
 					} else {
-						pagesMapList[index][name], _ = layout.TableToDataPages(table, int32(pageSize),
+						pagesMapList[index][name], _ = layout.TableToDataPages(table, int32(pw.PageSize),
 							pw.CompressionType)
 					}
 				}

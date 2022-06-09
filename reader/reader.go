@@ -39,50 +39,33 @@ func NewParquetReader(pFile source.ParquetFile, obj interface{}, np int64) (*Par
 	if err = res.ReadFooter(); err != nil {
 		return nil, err
 	}
-	res.ColumnBuffers = make(map[string]*ColumnBufferType)
 
 	if obj != nil {
 		if sa, ok := obj.(string); ok {
-			err = res.SetSchemaHandlerFromJSON(sa)
-			return res, err
-
+			res.SchemaHandler, err = schema.NewSchemaHandlerFromJSON(sa)
+			if err != nil {
+				return nil, err
+			}
 		} else if sa, ok := obj.([]*parquet.SchemaElement); ok {
 			res.SchemaHandler = schema.NewSchemaHandlerFromSchemaList(sa)
-
 		} else {
-			if res.SchemaHandler, err = schema.NewSchemaHandlerFromStruct(obj); err != nil {
-				return res, err
+			res.SchemaHandler, err = schema.NewSchemaHandlerFromStruct(obj)
+			if err != nil {
+				return nil, err
 			}
-
 			res.ObjType = reflect.TypeOf(obj).Elem()
 		}
 
 	} else {
 		res.SchemaHandler = schema.NewSchemaHandlerFromSchemaList(res.Footer.Schema)
 	}
-
 	res.RenameSchema()
-	for i := 0; i < len(res.SchemaHandler.SchemaElements); i++ {
-		schema := res.SchemaHandler.SchemaElements[i]
-		if schema.GetNumChildren() == 0 {
-			pathStr := res.SchemaHandler.IndexMap[int32(i)]
-			if res.ColumnBuffers[pathStr], err = NewColumnBuffer(pFile, res.Footer, res.SchemaHandler, pathStr); err != nil {
-				return res, err
-			}
-		}
-	}
-
 	return res, nil
 }
 
-func (pr *ParquetReader) SetSchemaHandlerFromJSON(jsonSchema string) error {
+func (pr *ParquetReader) SetColumnBuffers() error {
 	var err error
-
-	if pr.SchemaHandler, err = schema.NewSchemaHandlerFromJSON(jsonSchema); err != nil {
-		return err
-	}
-
-	pr.RenameSchema()
+	pr.ColumnBuffers = make(map[string]*ColumnBufferType)
 	for i := 0; i < len(pr.SchemaHandler.SchemaElements); i++ {
 		schemaElement := pr.SchemaHandler.SchemaElements[i]
 		if schemaElement.GetNumChildren() == 0 {
@@ -91,6 +74,14 @@ func (pr *ParquetReader) SetSchemaHandlerFromJSON(jsonSchema string) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (pr *ParquetReader) SetSchemaHandlerFromJSON(jsonSchema string) error {
+	var err error
+	if pr.SchemaHandler, err = schema.NewSchemaHandlerFromJSON(jsonSchema); err != nil {
+		return err
 	}
 	return nil
 }
@@ -262,6 +253,13 @@ func (pr *ParquetReader) ReadPartialByNumber(maxReadNumber int, prefixPath strin
 
 //Read rows of parquet file with a prefixPath
 func (pr *ParquetReader) read(dstInterface interface{}, prefixPath string) error {
+	if pr.ColumnBuffers == nil {
+		err := pr.SetColumnBuffers()
+		if err != nil {
+			return err
+		}
+	}
+
 	var err error
 	tmap := make(map[string]*layout.Table)
 	locker := new(sync.Mutex)
