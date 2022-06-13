@@ -165,9 +165,15 @@ func StrToParquetType(s string, pT *parquet.Type, cT *parquet.ConvertedType, len
 
 	} else if *cT == parquet.ConvertedType_UINT_32 {
 		var v uint32
-		_, err := fmt.Sscanf(s, "%d", &v)
+		var err error
+		if s == "false" {
+			v = 0
+		} else if s == "true" {
+			v = 1
+		} else {
+			_, err = fmt.Sscanf(s, "%d", &v)
+		}
 		return int32(v), err
-
 	} else if *cT == parquet.ConvertedType_DATE || *cT == parquet.ConvertedType_TIME_MILLIS {
 		var v int32
 		_, err := fmt.Sscanf(s, "%d", &v)

@@ -955,6 +955,9 @@ func SizeOf(val reflect.Value) int64 {
 	var size int64
 	switch val.Type().Kind() {
 	case reflect.Interface:
+		if val.IsNil() {
+			return 0
+		}
 		return SizeOf(val.Elem())
 	case reflect.Ptr:
 		if val.IsNil() {
